@@ -52,7 +52,7 @@ type ApplyMsg struct {
 
 // 全局参数
 const Follower, Candidate, Leader = 1, 2, 3     // 节点的三种状态
-const tickInterval = 70 * time.Millisecond      //
+const tickInterval = 50 * time.Millisecond      //
 const heartbeatTimeout = 150 * time.Millisecond //心跳超时
 
 // A Go object implementing a single Raft peer.
@@ -78,7 +78,7 @@ type Raft struct {
 
 	// Volatile state
 	commitIndex int // 本机提交
-	lastApplied int // 该日志在所有的机器上跑一边后更新
+	lastApplied int // 该日志在所有的机器上跑一遍后更新
 
 	applyHelper *ApplyHelper
 	applyCond   *sync.Cond
