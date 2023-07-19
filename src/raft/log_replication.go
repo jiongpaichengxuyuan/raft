@@ -32,7 +32,7 @@ func (rf *Raft) HandleAppendEntriesRPC(args *RequestAppendEntriesArgs, reply *Re
 		rf.currentTerm = args.LeaderTerm
 		reply.FollowerTerm = rf.currentTerm
 	}
-
+	defer rf.persist()
 	if args.PrevLogIndex+1 < rf.log.FirstLogIndex || args.PrevLogIndex > rf.log.LastLogIndex {
 		reply.FollowerTerm = rf.currentTerm
 		reply.Success = false

@@ -23,7 +23,7 @@ func (rf *Raft) StartElection() {
 	args.CandidateId = rf.me
 	args.LastLogIndex = rf.log.LastLogIndex
 	args.LastLogTerm = rf.getLastEntryTerm()
-
+	defer rf.persist()
 	for i, _ := range rf.peers {
 		if rf.me == i {
 			continue
@@ -122,6 +122,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// 竞选leader的节点任期小于等于自己的任期，则反对票
 	if args.Term < rf.currentTerm {
 		reply.VoteGranted = false
+		rf.persist()
 		return
 	}
 	if args.Term > rf.currentTerm {
@@ -140,6 +141,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.votedFor = args.CandidateId
 		rf.state = Follower
 		rf.resetElectionTimer() // 自己的票已经投出去了就转为Follower状态
+		rf.persist()
 	} else {
 		reply.VoteGranted = false
 	}

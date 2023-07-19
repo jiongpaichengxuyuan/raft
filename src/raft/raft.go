@@ -19,6 +19,7 @@ package raft
 
 import (
 	//	"bytes"
+	"bytes"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -26,6 +27,7 @@ import (
 	"time"
 
 	//	"6.5840/labgob"
+	"6.5840/labgob"
 	"6.5840/labrpc"
 )
 
@@ -140,26 +142,36 @@ func (rf *Raft) persist() {
 	// e.Encode(rf.yyy)
 	// raftstate := w.Bytes()
 	// rf.persister.Save(raftstate, nil)
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.log)
+	raftstate := w.Bytes()
+	go rf.persister.Save(raftstate, nil)
 }
 
 // restore previously persisted state.
-func (rf *Raft) readPersist(data []byte) {
-	if data == nil || len(data) < 1 { // bootstrap without any state?
+func (rf *Raft) readPersist() {
+	stateData := rf.persister.ReadRaftState()
+	if stateData == nil || len(stateData) < 1 { // bootstrap without any state?
 		return
 	}
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 	// Your code here (2C).
-	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := labgob.NewDecoder(r)
-	// var xxx
-	// var yyy
-	// if d.Decode(&xxx) != nil ||
-	//    d.Decode(&yyy) != nil {
-	//   error...
-	// } else {
-	//   rf.xxx = xxx
-	//   rf.yyy = yyy
-	// }
+	if stateData != nil && len(stateData) > 0 { // bootstrap without any state?
+		r := bytes.NewBuffer(stateData)
+		d := labgob.NewDecoder(r)
+		rf.votedFor = 0 // in case labgob waring
+		if d.Decode(&rf.currentTerm) != nil ||
+			d.Decode(&rf.votedFor) != nil ||
+			d.Decode(&rf.log) != nil {
+			//   error...
+			DPrintf(999, "%v: readPersist decode error\n", rf.SayMeL())
+			panic("")
+		}
+	}
 }
 
 // the service says it has created a snapshot that has
@@ -258,6 +270,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	}
 	index = rf.log.LastLogIndex + 1
 	rf.log.appendL(Entry{term, command})
+	rf.persist()
 	go rf.StartAppendEntries(false)
 	return index, term, isLeader
 }
@@ -385,6 +398,7 @@ func (rf *Raft) AppendEntries(targetServerId int, heart bool) {
 			rf.state = Follower
 			rf.currentTerm = reply.FollowerTerm
 			rf.votedFor = None
+			rf.persist()
 			return
 		}
 		DPrintf(111, "%v: get append reply reply.PrevLogIndex=%v reply.PrevLogTerm=%v reply.Success=%v heart=%v\n", rf.SayMeL(), reply.PrevLogIndex, reply.PrevLogTerm, reply.Success, heart)
@@ -506,8 +520,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.heartbeatTimeout = heartbeatTimeout
 	rf.resetElectionTimer()
 	// initialize from state persisted before a crash
-	rf.readPersist(persister.ReadRaftState())
 	rf.log = NewLog()
+	rf.readPersist()
 	rf.applyHelper = NewApplyHelper(applyCh, rf.lastApplied)
 	rf.commitIndex = 0
 	rf.lastApplied = 0
